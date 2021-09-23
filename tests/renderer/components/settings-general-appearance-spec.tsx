@@ -2,6 +2,7 @@ import { IItemRendererProps } from '@blueprintjs/select';
 import { shell } from 'electron';
 import { shallow } from 'enzyme';
 import * as React from 'react';
+import * as fs from 'fs-extra';
 
 import {
   AppearanceSettings,
@@ -10,6 +11,8 @@ import {
 } from '../../../src/renderer/components/settings-general-appearance';
 import { getAvailableThemes } from '../../../src/renderer/themes';
 import { FiddleTheme } from '../../../src/renderer/themes-defaults';
+
+import { StateMock } from '../../mocks/mocks';
 
 const mockThemes = [
   {
@@ -22,9 +25,6 @@ const doNothingFunc = () => {
 };
 
 jest.mock('fs-extra');
-jest.mock('../../../src/utils/import', () => ({
-  fancyImport: async (p: string) => require(p),
-}));
 
 jest.mock('../../../src/renderer/themes', () => ({
   THEMES_PATH: '~/.electron-fiddle/themes',
@@ -36,12 +36,10 @@ jest.mock('../../../src/renderer/themes', () => ({
 }));
 
 describe('AppearanceSettings component', () => {
-  let store: any;
+  let store: StateMock;
 
   beforeEach(() => {
-    store = {
-      setTheme: jest.fn(),
-    };
+    ({ state: store } = (window as any).ElectronFiddle.app);
 
     (getAvailableThemes as jest.Mock).mockResolvedValue(mockThemes);
   });
@@ -49,7 +47,7 @@ describe('AppearanceSettings component', () => {
   it('renders', () => {
     const wrapper = shallow(
       <AppearanceSettings
-        appState={store}
+        appState={store as any}
         toggleHasPopoverOpen={doNothingFunc}
       />,
     );
@@ -57,25 +55,23 @@ describe('AppearanceSettings component', () => {
     expect(wrapper).toMatchSnapshot();
   });
 
-  it('renders the correct selected theme', (done) => {
+  it('renders the correct selected theme', async () => {
     store.theme = 'defaultDark';
     const wrapper = shallow(
       <AppearanceSettings
-        appState={store}
+        appState={store as any}
         toggleHasPopoverOpen={doNothingFunc}
       />,
     );
 
-    process.nextTick(() => {
-      expect((wrapper.state() as any).selectedTheme.name).toBe('defaultDark');
-      done();
-    });
+    await process.nextTick;
+    expect((wrapper.state() as any).selectedTheme.name).toBe('defaultDark');
   });
 
   it('handles a theme change', () => {
     const wrapper = shallow(
       <AppearanceSettings
-        appState={store}
+        appState={store as any}
         toggleHasPopoverOpen={doNothingFunc}
       />,
     );
@@ -88,7 +84,10 @@ describe('AppearanceSettings component', () => {
   it('toggles popover toggle event', () => {
     const toggleFunc = jest.fn();
     const wrapper = shallow(
-      <AppearanceSettings appState={store} toggleHasPopoverOpen={toggleFunc} />,
+      <AppearanceSettings
+        appState={store as any}
+        toggleHasPopoverOpen={toggleFunc}
+      />,
     );
 
     // Find the button
@@ -107,7 +106,7 @@ describe('AppearanceSettings component', () => {
     it('attempts to open the folder', async () => {
       const wrapper = shallow(
         <AppearanceSettings
-          appState={store}
+          appState={store as any}
           toggleHasPopoverOpen={doNothingFunc}
         />,
       );
@@ -120,7 +119,7 @@ describe('AppearanceSettings component', () => {
     it('handles an error', async () => {
       const wrapper = shallow(
         <AppearanceSettings
-          appState={store}
+          appState={store as any}
           toggleHasPopoverOpen={doNothingFunc}
         />,
       );
@@ -135,10 +134,9 @@ describe('AppearanceSettings component', () => {
 
   describe('createNewThemeFromCurrent()', () => {
     it('creates a new file from the current theme', async () => {
-      const fs = require('fs-extra');
       const wrapper = shallow(
         <AppearanceSettings
-          appState={store}
+          appState={store as any}
           toggleHasPopoverOpen={doNothingFunc}
         />,
       );
@@ -148,7 +146,7 @@ describe('AppearanceSettings component', () => {
       expect(shell.showItemInFolder).toHaveBeenCalled();
       expect(fs.outputJSON).toHaveBeenCalled();
 
-      const args = fs.outputJSON.mock.calls[0];
+      const args = (fs.outputJSON as jest.Mock).mock.calls[0];
       expect(args[0].includes(`.electron-fiddle`)).toBe(true);
       expect(args[1].name).toBeDefined();
       expect(args[1].name === 'defaultDark').toBe(false);
@@ -157,7 +155,6 @@ describe('AppearanceSettings component', () => {
     });
 
     it('adds the newly created theme to the Themes dropdown', async () => {
-      const fs = require('fs-extra');
       const arr: Array<FiddleTheme> = [];
       (getAvailableThemes as jest.Mock).mockResolvedValue(arr);
       (fs.outputJSON as jest.Mock).mockImplementation(
@@ -167,7 +164,7 @@ describe('AppearanceSettings component', () => {
       );
       const wrapper = shallow(
         <AppearanceSettings
-          appState={store}
+          appState={store as any}
           toggleHasPopoverOpen={doNothingFunc}
         />,
       );
@@ -180,7 +177,7 @@ describe('AppearanceSettings component', () => {
     it('handles an error', async () => {
       const wrapper = shallow(
         <AppearanceSettings
-          appState={store}
+          appState={store as any}
           toggleHasPopoverOpen={doNothingFunc}
         />,
       );

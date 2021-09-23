@@ -3,26 +3,26 @@ import {
   VersionSource,
   VersionState,
 } from '../../src/interfaces';
-import { arrayToStringMap } from '../../src/utils/array-to-stringmap';
 
-export const mockVersionsArray = [
-  {
-    state: VersionState.ready,
-    version: '2.0.2',
-    source: VersionSource.remote,
-  },
-  {
-    state: VersionState.ready,
-    version: '2.0.1',
-    source: VersionSource.remote,
-  },
-  {
-    state: VersionState.ready,
-    version: '1.8.7',
-    source: VersionSource.remote,
-  },
-];
+export class VersionsMock {
+  public readonly mockVersions: Record<string, RunnableVersion>;
+  public readonly mockVersionsArray: RunnableVersion[];
 
-export const mockVersions: Record<string, RunnableVersion> = arrayToStringMap(
-  mockVersionsArray,
-);
+  constructor() {
+    const versions = ['2.0.3', '2.0.2', '2.0.1', '2.0.0', '1.8.7'];
+
+    const arr = versions.map((version) => ({
+      source: VersionSource.remote,
+      state: VersionState.ready,
+      version,
+    }));
+
+    const obj = {};
+    for (const ver of arr) {
+      obj[ver.version] = ver;
+    }
+
+    this.mockVersions = obj;
+    this.mockVersionsArray = arr;
+  }
+}

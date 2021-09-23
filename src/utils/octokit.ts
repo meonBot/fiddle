@@ -1,7 +1,6 @@
 import { Octokit } from '@octokit/rest';
 import { AppState } from '../renderer/state';
 
-let _Octokit: typeof Octokit;
 let _octo: Octokit;
 
 /**
@@ -12,17 +11,14 @@ let _octo: Octokit;
  * @returns {Promise<typeof GitHubType>}
  */
 export async function getOctokit(appState?: AppState): Promise<Octokit> {
-  _Octokit = _Octokit || ((await import('@octokit/rest')) as any).default;
-  _octo = _octo || new _Octokit();
-
-  // You can load Gists without being authenticated,
-  // but we get better rate limits when authenticated
-  if (appState && appState.gitHubToken) {
-    _octo.authenticate({
-      type: 'token',
-      token: appState.gitHubToken!,
-    });
-  }
+  // It's possible to load Gists without being authenticated,
+  // but we get better rate limits when authenticated.
+  _octo =
+    _octo || appState?.gitHubToken
+      ? new Octokit({
+          auth: appState?.gitHubToken,
+        })
+      : new Octokit();
 
   return _octo;
 }

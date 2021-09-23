@@ -6,7 +6,11 @@ import {
   shell,
 } from 'electron';
 
-import { BlockableAccelerator, Templates } from '../interfaces';
+import {
+  BlockableAccelerator,
+  SetUpMenuOptions,
+  Templates,
+} from '../interfaces';
 import { IpcEvents } from '../ipc-events';
 import { SHOW_ME_TEMPLATES } from '../templates';
 import { showOpenDialog, showSaveDialog } from './files';
@@ -31,7 +35,9 @@ function isSubmenu(
  * @returns {Array<Electron.MenuItemConstructorOptions>}
  */
 function getHelpItems(): Array<MenuItemConstructorOptions> {
-  return [
+  const items: MenuItemConstructorOptions[] = [];
+
+  items.push(
     {
       type: 'separator',
     },
@@ -76,7 +82,25 @@ function getHelpItems(): Array<MenuItemConstructorOptions> {
         shell.openExternal('https://github.com/electron/electron/issues');
       },
     },
-  ];
+  );
+
+  // on macOS, there's already the About Electron Fiddle menu item
+  // under the first submenu set by the electron-default-menu package
+  if (process.platform !== 'darwin') {
+    items.push(
+      {
+        type: 'separator',
+      },
+      {
+        label: 'About Electron Fiddle',
+        click() {
+          app.showAboutPanel();
+        },
+      },
+    );
+  }
+
+  return items;
 }
 
 /**
@@ -149,11 +173,14 @@ function getTasksMenu(): MenuItemConstructorOptions {
 
 function getShowMeMenuItem(
   key: string,
+  activeKey: string | null,
   item: string | Templates,
 ): MenuItemConstructorOptions {
   if (typeof item === 'string') {
     return {
       label: key,
+      type: 'radio',
+      checked: key === activeKey,
       click: () => ipcMainManager.send(IpcEvents.FS_OPEN_TEMPLATE, [key]),
     };
   }
@@ -161,15 +188,19 @@ function getShowMeMenuItem(
   return {
     label: key,
     submenu: Object.keys(item).map((subkey) => {
-      return getShowMeMenuItem(subkey, item[subkey]);
+      return getShowMeMenuItem(subkey, activeKey, item[subkey]);
     }),
   };
 }
 
-function getShowMeMenu(): MenuItemConstructorOptions {
+function getShowMeMenu(
+  activeTemplate: string | null,
+): MenuItemConstructorOptions {
   const showMeMenu: Array<MenuItemConstructorOptions> = Object.keys(
     SHOW_ME_TEMPLATES,
-  ).map((key) => getShowMeMenuItem(key, SHOW_ME_TEMPLATES[key]));
+  ).map((key) =>
+    getShowMeMenuItem(key, activeTemplate, SHOW_ME_TEMPLATES[key]),
+  );
 
   return {
     label: 'Show Me',
@@ -188,8 +219,19 @@ function getFileMenu(
   const fileMenu: Array<MenuItemConstructorOptions> = [
     {
       label: 'New Fiddle',
-      click: () => ipcMainManager.send(IpcEvents.FS_NEW_FIDDLE),
+      click: () => {
+        ipcMainManager.send(IpcEvents.CLEAR_CONSOLE);
+        return ipcMainManager.send(IpcEvents.FS_NEW_FIDDLE);
+      },
       accelerator: 'CmdOrCtrl+N',
+    },
+    {
+      label: 'New Test',
+      click: () => {
+        ipcMainManager.send(IpcEvents.CLEAR_CONSOLE);
+        return ipcMainManager.send(IpcEvents.FS_NEW_TEST);
+      },
+      accelerator: 'CmdOrCtrl+T',
     },
     {
       label: 'New Window',
@@ -203,6 +245,16 @@ function getFileMenu(
       label: 'Open',
       click: showOpenDialog,
       accelerator: 'CmdOrCtrl+O',
+    },
+    {
+      label: 'Open Recent',
+      role: 'recentDocuments',
+      submenu: [
+        {
+          label: 'Clear Recent',
+          role: 'clearRecentDocuments',
+        },
+      ],
     },
     {
       type: 'separator',
@@ -254,12 +306,16 @@ function getFileMenu(
 /**
  * Creates the app's window menu.
  */
-export function setupMenu(acceleratorsToBlock: BlockableAccelerator[] = []) {
+export function setupMenu(options?: SetUpMenuOptions) {
+  const acceleratorsToBlock = options?.acceleratorsToBlock || [];
+  const activeTemplate = options?.activeTemplate || null;
+
   // Get template for default menu
   const defaultMenu = require('electron-default-menu');
-  const menu = (defaultMenu(app, shell) as Array<
-    MenuItemConstructorOptions
-  >).map((item) => {
+  const menu = (defaultMenu(
+    app,
+    shell,
+  ) as Array<MenuItemConstructorOptions>).map((item) => {
     const { label } = item;
 
     // Append the "Settings" item
@@ -341,7 +397,12 @@ export function setupMenu(acceleratorsToBlock: BlockableAccelerator[] = []) {
     getFileMenu(acceleratorsToBlock),
   );
 
-  menu.splice(menu.length - 1, 0, getTasksMenu(), getShowMeMenu());
+  menu.splice(
+    menu.length - 1,
+    0,
+    getTasksMenu(),
+    getShowMeMenu(activeTemplate),
+  );
 
   Menu.setApplicationMenu(Menu.buildFromTemplate(menu));
 }

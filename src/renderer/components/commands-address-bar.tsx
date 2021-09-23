@@ -10,11 +10,11 @@ import { idFromUrl, urlFromId } from '../../utils/gist';
 import { ipcRendererManager } from '../ipc';
 import { AppState } from '../state';
 
-export interface AddressBarProps {
+interface AddressBarProps {
   appState: AppState;
 }
 
-export interface AddressBarState {
+interface AddressBarState {
   value: string;
   loaders: {
     gist: any;
@@ -111,11 +111,13 @@ export class AddressBar extends React.Component<
     this.setState({ value: event.target.value });
   }
 
-  public handleBlur(_event: React.FocusEvent<HTMLInputElement>) {
+  public handleBlur(event: React.FocusEvent<HTMLInputElement>) {
     const { gistId } = this.props.appState;
     const url = urlFromId(gistId);
 
-    if (url) {
+    const shouldResetURL =
+      url === event.target.value || event.target.value === '';
+    if (url && shouldResetURL) {
       this.setState({ value: url });
     }
   }
@@ -132,10 +134,11 @@ export class AddressBar extends React.Component<
   }
 
   public render() {
-    const { isUnsaved, activeGistAction } = this.props.appState;
+    const { activeGistAction } = this.props.appState;
+    const { isEdited } = this.props.appState.editorMosaic;
     const { value } = this.state;
     const isCorrect = /https:\/\/gist\.github\.com\/(.+)$/.test(value);
-    const className = classnames('address-bar', isUnsaved, { empty: !value });
+    const className = classnames('address-bar', isEdited, { empty: !value });
 
     const isPerformingAction = activeGistAction !== GistActionState.none;
     return (

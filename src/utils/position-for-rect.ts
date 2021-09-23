@@ -1,25 +1,9 @@
 import { ArrowPosition } from '../interfaces';
 
-export interface PositionResult {
+interface PositionResult {
   top: number;
   left: number;
   type: ArrowPosition;
-}
-
-/**
- * Invert an arrow position
- *
- * @param {ArrowPosition} input
- * @returns {ArrowPosition}
- */
-export function invertPosition(input: ArrowPosition): ArrowPosition {
-  if (input === 'left') return 'right';
-  if (input === 'right') return 'left';
-  if (input === 'top') return 'bottom';
-  if (input === 'bottom') return 'top';
-
-  // Should be impossible
-  return 'top';
 }
 
 /**

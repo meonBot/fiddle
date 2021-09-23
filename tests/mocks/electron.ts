@@ -1,10 +1,10 @@
 import { EventEmitter } from 'events';
-import { MockBrowserWindow } from './browser-window';
-import { MockWebContents } from './web-contents';
+import { BrowserWindowMock } from './browser-window';
+import { WebContentsMock } from './web-contents';
 
-const createdNotifications: Array<MockNotification> = [];
+const createdNotifications: Array<NotificationMock> = [];
 
-class MockNotification extends EventEmitter {
+class NotificationMock extends EventEmitter {
   public readonly show = jest.fn();
 
   constructor(public readonly options: any) {
@@ -20,42 +20,42 @@ class Screen extends EventEmitter {
   public readonly getCursorScreenPoint = jest.fn();
 }
 
-class MockAutoUpdater extends EventEmitter {
+class AutoUpdaterMock extends EventEmitter {
   public readonly quitAndInstall = jest.fn();
 }
 
-export class MockMenu {
+export class MenuMock {
   public static readonly setApplicationMenu = jest.fn();
   public static readonly sendActionToFirstResponder = jest.fn();
   public static readonly getApplicationMenu = jest.fn();
   public static readonly buildFromTemplate = jest.fn();
   public readonly popup = jest.fn();
   public readonly closePopup = jest.fn();
-  public items: Array<MockMenuItem> = [];
-  public append(mi: MockMenuItem) {
+  public items: Array<MenuItemMock> = [];
+  public append(mi: MenuItemMock) {
     this.items.push(mi);
   }
-  public insert(pos: number, mi: MockMenuItem) {
+  public insert(pos: number, mi: MenuItemMock) {
     this.items = this.items.splice(pos, 0, mi);
   }
 }
 
-export class MockNativeImage {
+export class NativeImageMock {
   public readonly args: Array<any>;
   constructor(...args: Array<any>) {
     this.args = args;
   }
 }
 
-export class MockMenuItem {
+export class MenuItemMock {
   public enabled: boolean;
   public visible: boolean;
   public label: string;
   public type: string;
   public click: (
     menuItem: Electron.MenuItem,
-    browserWindow: Electron.BrowserWindow,
-    event: Electron.Event,
+    browserWindow: Electron.BrowserWindow | undefined,
+    event: KeyboardEvent,
   ) => void;
 
   constructor(options: Electron.MenuItemConstructorOptions) {
@@ -67,13 +67,16 @@ export class MockMenuItem {
   }
 }
 
-export class MockIPC extends EventEmitter {
-  public send: any;
+export class IPCMainMock extends EventEmitter {
+  public handle = jest.fn();
+  public handleOnce = jest.fn();
+  public removeHandler = jest.fn();
+  public send = jest.fn();
+}
 
-  constructor() {
-    super();
-    this.send = jest.fn();
-  }
+export class IPCRendererMock extends EventEmitter {
+  public send = jest.fn();
+  public invoke = jest.fn();
 }
 
 function CreateWindowStub() {
@@ -85,18 +88,11 @@ function CreateWindowStub() {
     setTitle: jest.fn(),
     reload: jest.fn(),
     isDestroyed: jest.fn(() => false),
-    setTouchBar: jest.fn(),
   };
 }
 
-class MockTouchBar {
-  public static TouchBarButton = jest.fn();
-  public static TouchBarScrubber = jest.fn();
-  public static TouchBarSpacer = jest.fn();
-  public static TouchBarLabel = jest.fn();
-}
-
 const app = {
+  addRecentDocument: jest.fn(),
   getName: jest.fn().mockReturnValue('Electron Fiddle'),
   exit: jest.fn(),
   hide: jest.fn(),
@@ -112,11 +108,11 @@ const app = {
     removedItems: [],
   })),
   getLoginItemSettings: jest.fn(),
-  getPath: (name: string) => {
+  getPath: jest.fn((name: string) => {
     if (name === 'userData') return '/Users/fake-user';
     if (name === 'home') return `~`;
     return '/test-path';
-  },
+  }),
   focus: jest.fn(),
   quit: jest.fn(),
   relaunch: jest.fn(),
@@ -131,7 +127,7 @@ const app = {
 
 const mainWindowStub = CreateWindowStub();
 const focusedWindowStub = CreateWindowStub();
-const autoUpdater = new MockAutoUpdater();
+const autoUpdater = new AutoUpdaterMock();
 
 const session = {
   defaultSession: {
@@ -156,7 +152,7 @@ const systemPreferences = {
 const electronMock = {
   app,
   autoUpdater,
-  BrowserWindow: MockBrowserWindow,
+  BrowserWindow: BrowserWindowMock,
   clipboard: {
     readText: jest.fn(),
     readImage: jest.fn(),
@@ -167,13 +163,14 @@ const electronMock = {
     start: jest.fn(),
   },
   dialog: {
-    showOpenDialog: jest.fn(() => Promise.resolve({})),
-    showMessageBox: jest.fn(() => Promise.resolve({})),
+    showOpenDialog: jest.fn().mockResolvedValue({}),
+    showOpenDialogSync: jest.fn().mockReturnValue(['path']),
+    showMessageBox: jest.fn().mockResolvedValue({}),
   },
-  ipcMain: new MockIPC(),
-  ipcRenderer: new MockIPC(),
+  ipcMain: new IPCMainMock(),
+  ipcRenderer: new IPCRendererMock(),
   nativeImage: {
-    createFromPath: (...args: Array<any>) => new MockNativeImage(...args),
+    createFromPath: (...args: Array<any>) => new NativeImageMock(...args),
     createFromBuffer: jest.fn(),
     createFromDataURL: jest.fn(function () {
       return { toPNG: jest.fn(() => 'content') };
@@ -181,9 +178,9 @@ const electronMock = {
     createEmpty: jest.fn(),
   },
   match: jest.fn(),
-  Menu: MockMenu,
-  MenuItem: MockMenuItem,
-  Notification: MockNotification,
+  Menu: MenuMock,
+  MenuItem: MenuItemMock,
+  Notification: NotificationMock,
   _notifications: createdNotifications,
   protocol: {
     registerStandardSchemes: jest.fn(),
@@ -201,36 +198,17 @@ const electronMock = {
     interceptHttpProtocol: jest.fn(),
     uninterceptProtocol: jest.fn(),
   },
-  remote: {
-    app,
-    session,
-    BrowserWindow: MockBrowserWindow,
-    getCurrentWindow: jest.fn(),
-    getGlobal: jest.fn(),
-    Menu: MockMenu,
-    MenuItem: MockMenuItem,
-    process: {
-      argv: [
-        '/Applications/Electron Fiddle.app/Contents/MacOS/electron-fiddle',
-      ],
-    },
-    shell,
-    require: jest.fn(),
-    TouchBar: MockTouchBar,
-    systemPreferences,
-  },
   require: jest.fn(),
   screen: new Screen(),
   session,
   shell,
   systemPreferences,
-  TouchBar: MockTouchBar,
-  webContents: MockWebContents,
+  webContents: WebContentsMock,
 };
 
 electronMock.BrowserWindow.getAllWindows.mockReturnValue([]);
 electronMock.BrowserWindow.fromId.mockReturnValue(mainWindowStub);
+electronMock.BrowserWindow.fromWebContents.mockReturnValue(mainWindowStub);
 electronMock.BrowserWindow.getFocusedWindow.mockReturnValue(focusedWindowStub);
-electronMock.remote.getCurrentWindow.mockReturnValue(mainWindowStub);
 
 module.exports = electronMock;

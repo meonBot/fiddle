@@ -1,7 +1,7 @@
 import { initSentry } from '../sentry';
 initSentry();
 
-import { app } from 'electron';
+import { app, BrowserWindow, systemPreferences } from 'electron';
 
 import { IpcEvents } from '../ipc-events';
 import { isDevMode } from '../utils/devmode';
@@ -9,11 +9,15 @@ import { setupAboutPanel } from './about-panel';
 import { setupDevTools } from './devtools';
 import { setupDialogs } from './dialogs';
 import { onFirstRunMaybe } from './first-run';
+import { processCommandLine } from './command-line';
 import { ipcMainManager } from './ipc';
 import { listenForProtocolHandler, setupProtocolHandler } from './protocol';
 import { shouldQuit } from './squirrel';
 import { setupUpdates } from './update';
 import { getOrCreateMainWindow } from './windows';
+import { IpcMainEvent } from 'electron/main';
+
+let argv: string[] = [];
 
 /**
  * Handle the app's "ready" event. This is essentially
@@ -36,6 +40,9 @@ export async function onReady() {
   setupUpdates();
   setupDialogs();
   setupDevTools();
+  setupTitleBarClickMac();
+
+  processCommandLine(argv);
 }
 
 /**
@@ -52,9 +59,50 @@ export function setupMenuHandler() {
   ipcMainManager.on(
     IpcEvents.BLOCK_ACCELERATORS,
     async (_, acceleratorsToBlock) => {
-      (await import('./menu')).setupMenu(acceleratorsToBlock);
+      (await import('./menu')).setupMenu({
+        acceleratorsToBlock,
+        activeTemplate: null,
+      });
     },
   );
+
+  ipcMainManager.on(
+    IpcEvents.SET_SHOW_ME_TEMPLATE,
+    async (_, activeTemplate) => {
+      (await import('./menu')).setupMenu({
+        acceleratorsToBlock: [],
+        activeTemplate,
+      });
+    },
+  );
+}
+
+/**
+ * On macOS, set up the custom titlebar click handler.
+ */
+export function setupTitleBarClickMac() {
+  if (process.platform !== 'darwin') {
+    return;
+  }
+
+  ipcMainManager.on(IpcEvents.CLICK_TITLEBAR_MAC, (event: IpcMainEvent) => {
+    const doubleClickAction = systemPreferences.getUserDefault(
+      'AppleActionOnDoubleClick',
+      'string',
+    );
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) {
+      if (doubleClickAction === 'Minimize') {
+        win.minimize();
+      } else if (doubleClickAction === 'Maximize') {
+        if (!win.isMaximized()) {
+          win.maximize();
+        } else {
+          win.unmaximize();
+        }
+      }
+    }
+  });
 }
 
 /**
@@ -75,7 +123,9 @@ export function onWindowsAllClosed() {
  *
  * Exported for testing purposes.
  */
-export function main() {
+export function main(argv_in: string[]) {
+  argv = argv_in;
+
   // Handle creating/removing shortcuts on Windows when
   // installing/uninstalling.
   if (shouldQuit()) {
@@ -96,4 +146,7 @@ export function main() {
   app.on('activate', getOrCreateMainWindow);
 }
 
-main();
+// only call main() if this is the main module
+if (typeof module !== 'undefined' && !module.parent) {
+  main(process.argv);
+}

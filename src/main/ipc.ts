@@ -16,7 +16,7 @@ import { getOrCreateMainWindow } from './windows';
  * @class IpcManager
  * @extends {EventEmitter}
  */
-export class IpcMainManager extends EventEmitter {
+class IpcMainManager extends EventEmitter {
   public readyWebContents = new WeakSet<Electron.WebContents>();
   private messageQueue = new WeakMap<
     Electron.WebContents,
@@ -68,6 +68,22 @@ export class IpcMainManager extends EventEmitter {
     }
 
     _target.send(channel, ..._args);
+  }
+
+  public handle(
+    channel: IpcEvents,
+    listener: (event: Electron.IpcMainInvokeEvent, ...args: any[]) => any,
+  ) {
+    // there can be only one, so remove previous one first
+    ipcMain.removeHandler(channel);
+    ipcMain.handle(channel, listener);
+  }
+
+  public handleOnce(
+    channel: IpcEvents,
+    listener: (event: Electron.IpcMainInvokeEvent, ...args: any[]) => any,
+  ) {
+    ipcMain.handleOnce(channel, listener);
   }
 }
 

@@ -10,15 +10,12 @@ save your Fiddle either as a GitHub Gist or to a local folder. Once published
 on GitHub, anyone can quickly try your Fiddle out by just entering it in the
 address bar.
 
-<h3 align="center">
-  <a href="https://github.com/electron/fiddle/releases/latest">
-  Download Electron Fiddle for macOS, Windows, and Linux
-  </a>
-</h3>
+**[Download Fiddle now!](https://www.electronjs.org/fiddle)**
+
 
 <img src="https://user-images.githubusercontent.com/1426799/52155868-d3357c80-2639-11e9-9496-fa97b1dc7897.jpg" width="880px" alt="Electron Fiddle screenshot">
 
-# Features
+## Features
 
 ### Explore Electron
 

@@ -1,7 +1,9 @@
 import { EditorValues } from '../interfaces';
 import { exec } from '../utils/exec';
+import stripComments from 'strip-comments';
 
-import { builtinModules } from 'module';
+// Making TypeScript happy and avoiding "esModuleInterop" issues
+const { builtinModules } = require('module');
 
 export type IPackageManager = 'npm' | 'yarn';
 
@@ -10,8 +12,8 @@ export interface PMOperationOptions {
   packageManager: IPackageManager;
 }
 
-export let isNpmInstalled: boolean | null = null;
-export let isYarnInstalled: boolean | null = null;
+let isNpmInstalled: boolean | null = null;
+let isYarnInstalled: boolean | null = null;
 
 /* add other modules to automatically ignore here */
 /* perhaps we can expose this to the settings module?*/
@@ -74,11 +76,16 @@ export async function getIsPackageManagerInstalled(
  * Finds npm modules in editor values, returning an array of modules.
  */
 export async function findModulesInEditors(values: EditorValues) {
-  const files = [values.main, values.renderer, values.preload];
   const modules: Array<string> = [];
 
-  for (const file of files) {
-    modules.push(...(await findModules(file)));
+  // Filter out all editor values which aren't JavaScript files.
+  const contents = Object.entries(values)
+    .filter(([filename]) => filename.endsWith('.js'))
+    .map(([_, content]) => content) as string[];
+
+  for (const content of contents) {
+    const found = await findModules(content);
+    modules.push(...found);
   }
 
   console.log('Modules Found:', modules);
@@ -99,13 +106,12 @@ export async function findModulesInEditors(values: EditorValues) {
  * @param {string} input
  * @returns {Array<string>}
  */
-export async function findModules(input: string) {
+export async function findModules(code: string) {
   /* container definitions */
   const modules: Array<string> = [];
   let match: RegExpMatchArray | null;
 
-  /* decomment code with the esprima parser */
-  const code = await decommentWithWorker(input);
+  code = stripComments(code);
 
   /* grab all global require matches in the text */
   while ((match = requiregx.exec(code) || null)) {
@@ -137,7 +143,7 @@ export async function installModules(
   let nameArgs: Array<string> = [];
 
   if (packageManager === 'npm') {
-    nameArgs = names.length > 0 ? ['-S', ...names] : ['--dev --prod'];
+    nameArgs = names.length > 0 ? ['-S', ...names] : ['--also=dev --prod'];
   } else {
     nameArgs = [...names];
   }
@@ -159,17 +165,4 @@ export function packageRun(
   command: string,
 ): Promise<string> {
   return exec(dir, `${packageManager} run ${command}`);
-}
-
-export function decommentWithWorker(input: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const worker = new Worker('../utils/decomment.ts');
-    worker.onmessage = function (event: MessageEvent<string>) {
-      resolve(event.data);
-    };
-    worker.postMessage(input);
-    worker.onerror = function (e) {
-      reject(e);
-    };
-  });
 }

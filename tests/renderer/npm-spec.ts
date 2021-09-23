@@ -1,5 +1,5 @@
 import { mocked } from 'ts-jest/utils';
-import * as decomment from 'decomment';
+import stripComments from 'strip-comments';
 
 import {
   findModules,
@@ -10,16 +10,9 @@ import {
 } from '../../src/renderer/npm';
 import { exec } from '../../src/utils/exec';
 import { overridePlatform, resetPlatform } from '../utils';
-import MockDecommentWorker from '../mocks/worker';
-jest.mock('decomment');
+import { DefaultEditorId } from '../../src/interfaces';
+jest.mock('strip-comments');
 jest.mock('../../src/utils/exec');
-jest.mock('../../src/utils/import', () => ({
-  fancyImport: async (_p: string) => {
-    return { default: require('builtin-modules') };
-  },
-}));
-
-window.Worker = MockDecommentWorker;
 
 describe('npm', () => {
   const mockBuiltins = `
@@ -40,8 +33,8 @@ describe('npm', () => {
     // const cow = require('cow');
     /* const say = require('say'); */
     /**
-     * const hello = require('hello'); 
-     * const world = require('world'); 
+     * const hello = require('hello');
+     * const world = require('world');
     */
   `;
 
@@ -171,19 +164,19 @@ describe('npm', () => {
 
   describe('findModules()', () => {
     it('returns required modules in a JS file', async () => {
-      mocked(decomment).mockReturnValue(mockPackages);
+      mocked(stripComments).mockReturnValue(mockPackages);
       const modules = await findModules(mockPackages);
       expect(modules).toEqual(['cow', 'say']);
     });
 
     it('ignores node and electron builtins', async () => {
-      mocked(decomment).mockReturnValue(mockBuiltins);
+      mocked(stripComments).mockReturnValue(mockBuiltins);
       const modules = await findModules(mockBuiltins);
       expect(modules).toHaveLength(0);
     });
 
     it('ignores commented modules', async () => {
-      mocked(decomment).mockReturnValue('');
+      mocked(stripComments).mockReturnValue('');
       const modules = await findModules(mockComments);
       expect(modules).toHaveLength(0);
     });
@@ -191,13 +184,13 @@ describe('npm', () => {
 
   describe('findModulesInEditors()', () => {
     it('installs modules across all JavaScript files only once', async () => {
-      mocked(decomment).mockReturnValue(mockPackages);
+      mocked(stripComments).mockReturnValue(mockPackages);
       const result = await findModulesInEditors({
-        html: '',
-        main: mockPackages,
-        renderer: mockPackages,
-        preload: mockPackages,
-        css: '',
+        [DefaultEditorId.html]: '',
+        [DefaultEditorId.main]: mockPackages,
+        [DefaultEditorId.renderer]: mockPackages,
+        [DefaultEditorId.preload]: mockPackages,
+        [DefaultEditorId.css]: '',
       });
 
       expect(result).toHaveLength(2);
@@ -214,7 +207,7 @@ describe('npm', () => {
           'thing',
         );
 
-        expect(exec).toHaveBeenCalledWith(
+        expect(exec).toHaveBeenCalledWith<any>(
           '/my/directory',
           'npm install -S say thing',
         );
@@ -223,9 +216,9 @@ describe('npm', () => {
       it('attempts to installs all modules', async () => {
         installModules({ dir: '/my/directory', packageManager: 'npm' });
 
-        expect(exec).toHaveBeenCalledWith(
+        expect(exec).toHaveBeenCalledWith<any>(
           '/my/directory',
-          'npm install --dev --prod',
+          'npm install --also=dev --prod',
         );
       });
     });
@@ -238,7 +231,7 @@ describe('npm', () => {
           'thing',
         );
 
-        expect(exec).toHaveBeenCalledWith(
+        expect(exec).toHaveBeenCalledWith<any>(
           '/my/directory',
           'yarn add say thing',
         );
@@ -247,7 +240,7 @@ describe('npm', () => {
       it('attempts to installs all modules', async () => {
         installModules({ dir: '/my/directory', packageManager: 'yarn' });
 
-        expect(exec).toHaveBeenCalledWith('/my/directory', 'yarn add');
+        expect(exec).toHaveBeenCalledWith<any>('/my/directory', 'yarn add');
       });
     });
   });
@@ -256,13 +249,19 @@ describe('npm', () => {
     it('attempts to run a command via npm', async () => {
       packageRun({ dir: '/my/directory', packageManager: 'npm' }, 'package');
 
-      expect(exec).toHaveBeenCalledWith('/my/directory', 'npm run package');
+      expect(exec).toHaveBeenCalledWith<any>(
+        '/my/directory',
+        'npm run package',
+      );
     });
 
     it('attempts to run a command via yarn', async () => {
       packageRun({ dir: '/my/directory', packageManager: 'yarn' }, 'package');
 
-      expect(exec).toHaveBeenCalledWith('/my/directory', 'yarn run package');
+      expect(exec).toHaveBeenCalledWith<any>(
+        '/my/directory',
+        'yarn run package',
+      );
     });
   });
 });

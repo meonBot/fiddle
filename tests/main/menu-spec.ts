@@ -17,11 +17,7 @@ jest.mock('../../src/main/ipc');
 describe('menu', () => {
   beforeEach(() => {
     electron.app.name = 'Electron Fiddle';
-    // need to keep this deprecated API for electron-default-menu mock as well
-    (electron.app.getName as any).mockReturnValue('Electron Fiddle');
-    (electron.dialog.showOpenDialog as any).mockReturnValue(
-      Promise.resolve({}),
-    );
+    (electron.dialog.showOpenDialog as jest.Mock).mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -83,9 +79,8 @@ describe('menu', () => {
       setupMenu();
 
       const result = (electron.Menu.buildFromTemplate as any).mock.calls[0][0];
-      const submenu = result[2].submenu as Array<
-        Electron.MenuItemConstructorOptions
-      >;
+      const submenu = result[2]
+        .submenu as Array<Electron.MenuItemConstructorOptions>;
 
       const toggleSoftWrap = submenu.find(
         ({ label }) => label === 'Toggle Soft Wrap',
@@ -106,15 +101,14 @@ describe('menu', () => {
       setupMenu();
 
       const result = (electron.Menu.buildFromTemplate as any).mock.calls[0][0];
-      const submenu = result[2].submenu as Array<
-        Electron.MenuItemConstructorOptions
-      >;
+      const submenu = result[2]
+        .submenu as Array<Electron.MenuItemConstructorOptions>;
 
       const toggleSoftWrap = submenu.find(
         ({ label }) => label === 'Toggle Bisect Helper',
       );
       (toggleSoftWrap as any).click();
-      expect(ipcMainManager.send).toHaveBeenCalledWith(
+      expect(ipcMainManager.send).toHaveBeenCalledWith<any>(
         IpcEvents.BISECT_COMMANDS_TOGGLE,
       );
     });
@@ -129,9 +123,36 @@ describe('menu', () => {
 
       const selectAll = submenu.find(({ label }) => label === 'Select All');
       (selectAll as any).click();
-      expect(ipcMainManager.send).toHaveBeenCalledWith(
+      expect(ipcMainManager.send).toHaveBeenCalledWith<any>(
         IpcEvents.SELECT_ALL_IN_EDITOR,
       );
+    });
+
+    describe('setup Show Me menu', () => {
+      it('show me menu correctly contains no check when no template is selected', () => {
+        overridePlatform('darwin');
+        setupMenu();
+
+        const result = (electron.Menu.buildFromTemplate as any).mock
+          .calls[0][0];
+        const showMeMenu = result[result.length - 2];
+
+        const showMeItemChecked = showMeMenu?.submenu[0]?.submenu[0]?.checked;
+        expect(showMeItemChecked).toEqual(false);
+      });
+
+      it('checks correct show me radio button after click', () => {
+        overridePlatform('darwin');
+        // simulate the menu rebuild after click that sends correct templateName
+        setupMenu({ activeTemplate: 'App' });
+
+        const result = (electron.Menu.buildFromTemplate as any).mock
+          .calls[0][0];
+        const showMeMenu = result[result.length - 2];
+
+        const showMeItemChecked = showMeMenu?.submenu[0]?.submenu[0]?.checked;
+        expect(showMeItemChecked).toEqual(true);
+      });
     });
   });
 
@@ -154,7 +175,7 @@ describe('menu', () => {
 
       it('shows the welcome tour', () => {
         help.submenu[1].click();
-        expect(ipcMainManager.send).toHaveBeenCalledWith(
+        expect(ipcMainManager.send).toHaveBeenCalledWith<any>(
           IpcEvents.SHOW_WELCOME_TOUR,
         );
       });
@@ -175,21 +196,21 @@ describe('menu', () => {
 
       it('opens the Fiddle repo', () => {
         help.submenu[5].click();
-        expect(electron.shell.openExternal).toHaveBeenCalledWith(
+        expect(electron.shell.openExternal).toHaveBeenCalledWith<any>(
           'https://github.com/electron/fiddle',
         );
       });
 
       it('opens the Electron repo', () => {
         help.submenu[6].click();
-        expect(electron.shell.openExternal).toHaveBeenCalledWith(
+        expect(electron.shell.openExternal).toHaveBeenCalledWith<any>(
           'https://github.com/electron/electron',
         );
       });
 
       it('opens the Electron issues', () => {
         help.submenu[7].click();
-        expect(electron.shell.openExternal).toHaveBeenCalledWith(
+        expect(electron.shell.openExternal).toHaveBeenCalledWith<any>(
           'https://github.com/electron/electron/issues',
         );
       });
@@ -206,7 +227,7 @@ describe('menu', () => {
 
       it('shows the preferences', () => {
         preferences.submenu[3].click();
-        expect(ipcMainManager.send).toHaveBeenCalledWith(
+        expect(ipcMainManager.send).toHaveBeenCalledWith<any>(
           IpcEvents.OPEN_SETTINGS,
         );
       });
@@ -238,9 +259,10 @@ describe('menu', () => {
 
       it('attempts to open a template on click', () => {
         showMe.submenu[0].submenu[0].click();
-        expect(
-          ipcMainManager.send,
-        ).toHaveBeenCalledWith(IpcEvents.FS_OPEN_TEMPLATE, ['App']);
+        expect(ipcMainManager.send).toHaveBeenCalledWith<any>(
+          IpcEvents.FS_OPEN_TEMPLATE,
+          ['App'],
+        );
       });
     });
 
@@ -255,24 +277,39 @@ describe('menu', () => {
 
       it('runs the fiddle', () => {
         tasks.submenu[0].click();
-        expect(ipcMainManager.send).toHaveBeenCalledWith(IpcEvents.FIDDLE_RUN);
+        expect(ipcMainManager.send).toHaveBeenCalledWith<any>(
+          IpcEvents.FIDDLE_RUN,
+        );
       });
 
       it('packages the fiddle', () => {
         tasks.submenu[1].click();
-        expect(ipcMainManager.send).toHaveBeenCalledWith(
+        expect(ipcMainManager.send).toHaveBeenCalledWith<any>(
           IpcEvents.FIDDLE_PACKAGE,
         );
       });
 
       it('makes the fiddle', () => {
         tasks.submenu[2].click();
-        expect(ipcMainManager.send).toHaveBeenCalledWith(IpcEvents.FIDDLE_MAKE);
+        expect(ipcMainManager.send).toHaveBeenCalledWith<any>(
+          IpcEvents.FIDDLE_MAKE,
+        );
       });
     });
 
     describe('getFileMenu()', () => {
       let file: any;
+      enum Idx {
+        NEW_FIDDLE = 0,
+        NEW_TEST = 1,
+        NEW_WINDOW = 2,
+        OPEN = 4,
+        OPEN_RECENT = 5,
+        SAVE = 7,
+        SAVE_AS = 8,
+        PUBLISH = 10,
+        FORGE = 11,
+      }
 
       beforeEach(() => {
         const mock = (electron.Menu.buildFromTemplate as any).mock;
@@ -281,59 +318,66 @@ describe('menu', () => {
       });
 
       it('creates a new fiddle', () => {
-        file.submenu[0].click();
-        expect(ipcMainManager.send).toHaveBeenCalledWith(
+        file.submenu[Idx.NEW_FIDDLE].click();
+        expect(ipcMainManager.send).toHaveBeenCalledWith<any>(
           IpcEvents.FS_NEW_FIDDLE,
         );
       });
 
+      it('creates a new fiddle', () => {
+        file.submenu[Idx.NEW_TEST].click();
+        expect(ipcMainManager.send).toHaveBeenCalledWith<any>(
+          IpcEvents.FS_NEW_TEST,
+        );
+      });
+
       it('creates a new window', () => {
-        file.submenu[1].click();
-        file.submenu[1].click();
+        file.submenu[Idx.NEW_WINDOW].click();
+        file.submenu[Idx.NEW_WINDOW].click();
         expect(createMainWindow).toHaveBeenCalledTimes(2);
       });
 
       it('opens a Fiddle', () => {
-        file.submenu[3].click();
+        file.submenu[Idx.OPEN].click();
         expect(electron.dialog.showOpenDialog).toHaveBeenCalled();
       });
 
       it('saves a Fiddle', () => {
-        file.submenu[5].click();
-        expect(ipcMainManager.send).toHaveBeenCalledWith(
+        file.submenu[Idx.SAVE].click();
+        expect(ipcMainManager.send).toHaveBeenCalledWith<any>(
           IpcEvents.FS_SAVE_FIDDLE,
         );
       });
 
       it('saves a Fiddle as', () => {
-        file.submenu[6].click();
-        expect(electron.dialog.showOpenDialog).toHaveBeenCalled();
+        file.submenu[Idx.SAVE_AS].click();
+        expect(electron.dialog.showOpenDialogSync).toHaveBeenCalled();
       });
 
       it('saves a Fiddle as a gist', () => {
-        file.submenu[8].click();
-        expect(ipcMainManager.send).toHaveBeenCalledWith(
+        file.submenu[Idx.PUBLISH].click();
+        expect(ipcMainManager.send).toHaveBeenCalledWith<any>(
           IpcEvents.FS_SAVE_FIDDLE_GIST,
         );
       });
 
       it('saves a Fiddle as a forge project', () => {
-        file.submenu[9].click();
-        expect(electron.dialog.showOpenDialog).toHaveBeenCalled();
+        file.submenu[Idx.FORGE].click();
+        expect(electron.dialog.showOpenDialogSync).toHaveBeenCalled();
       });
 
       it('saves a Fiddle with blocked accelerator', () => {
-        setupMenu([BlockableAccelerator.save]);
-        file.submenu[5].click();
-        expect(ipcMainManager.send).toHaveBeenCalledWith(
+        setupMenu({ acceleratorsToBlock: [BlockableAccelerator.save] });
+        file.submenu[Idx.SAVE].click();
+        expect(ipcMainManager.send).toHaveBeenCalledWith<any>(
           IpcEvents.FS_SAVE_FIDDLE,
         );
       });
 
       it('saves as a Fiddle with blocked accelerator', () => {
-        setupMenu([BlockableAccelerator.saveAs]);
-        file.submenu[6].click();
-        expect(electron.dialog.showOpenDialog).toHaveBeenCalled();
+        setupMenu({ acceleratorsToBlock: [BlockableAccelerator.saveAs] });
+        file.submenu[Idx.SAVE_AS].click();
+        expect(electron.dialog.showOpenDialogSync).toHaveBeenCalled();
       });
     });
   });

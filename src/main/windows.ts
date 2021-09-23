@@ -2,6 +2,7 @@ import { app, BrowserWindow, shell } from 'electron';
 import { IpcEvents } from '../ipc-events';
 import { createContextMenu } from './context-menu';
 import { ipcMainManager } from './ipc';
+import * as path from 'path';
 
 // Keep a global reference of the window objects, if we don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
@@ -21,11 +22,12 @@ export function getMainWindowOptions(): Electron.BrowserWindowConstructorOptions
     titleBarStyle: process.platform === 'darwin' ? 'hidden' : undefined,
     acceptFirstMouse: true,
     backgroundColor: '#1d2427',
+    show: false,
     webPreferences: {
       webviewTag: false,
       nodeIntegration: true,
-      enableRemoteModule: true,
-      nodeIntegrationInWorker: true,
+      contextIsolation: false,
+      preload: path.join(__dirname, '..', 'preload', 'preload'),
     },
   };
 }
@@ -47,6 +49,12 @@ export function createMainWindow(): Electron.BrowserWindow {
       browserWindow.show();
 
       createContextMenu(browserWindow);
+    }
+  });
+
+  browserWindow.on('focus', () => {
+    if (browserWindow) {
+      ipcMainManager.send(IpcEvents.SET_SHOW_ME_TEMPLATE);
     }
   });
 
@@ -72,12 +80,21 @@ export function createMainWindow(): Electron.BrowserWindow {
     }
   });
 
-  const appData = app.getPath('appData');
-  ipcMainManager.send(
-    IpcEvents.SET_APPDATA_DIR,
-    [appData],
-    browserWindow.webContents,
-  );
+  ipcMainManager.handle(IpcEvents.GET_APP_PATHS, () => {
+    const paths = {};
+    const pathsToQuery = [
+      'home',
+      'appData',
+      'userData',
+      'temp',
+      'downloads',
+      'desktop',
+    ];
+    for (const path of pathsToQuery) {
+      paths[path] = app.getPath(path as any);
+    }
+    return paths;
+  });
 
   browserWindows.push(browserWindow);
 

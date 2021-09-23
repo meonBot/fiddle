@@ -1,21 +1,20 @@
 import { Button, Dialog, FileInput } from '@blueprintjs/core';
 import { shell } from 'electron';
-import * as fsType from 'fs-extra';
+import * as fs from 'fs-extra';
 import { observer } from 'mobx-react';
 import * as MonacoType from 'monaco-editor';
 import * as path from 'path';
 import * as React from 'react';
 import { getTheme, THEMES_PATH } from '../themes';
 
-import { GenericDialogType } from '../../../src/interfaces';
 import { AppState } from '../state';
 import { defaultDark, LoadedFiddleTheme } from '../themes-defaults';
 
-export interface AddThemeDialogProps {
+interface AddThemeDialogProps {
   appState: AppState;
 }
 
-export interface AddThemeDialogState {
+interface AddThemeDialogState {
   file?: File;
 }
 
@@ -43,45 +42,42 @@ export class AddThemeDialog extends React.Component<
   }
 
   /**
-   * Handles a change of the file input
+   * Handles a change of the file input.
    *
    * @param {React.ChangeEvent<HTMLInputElement>} event
    */
   public async onChangeFile(event: React.FormEvent<HTMLInputElement>) {
     const { files } = event.target as any;
-    const file = files && files[0] ? files[0] : undefined;
+    const file = files?.[0];
 
     this.setState({ file });
   }
 
   /**
-   * Handles the submission of the dialog
+   * Handles the submission of the dialog.
    *
    * @returns {Promise<void>}
    */
   public async onSubmit(): Promise<void> {
     const { file } = this.state;
-    const defaultTheme = !!this.props.appState.theme
-      ? await getTheme(this.props.appState.theme)
+    const { appState } = this.props;
+
+    const defaultTheme = !!appState.theme
+      ? await getTheme(appState.theme)
       : defaultDark;
+
     if (!file) return;
 
     try {
-      const editor = fsType.readJSONSync(file.path);
+      const editor = fs.readJSONSync(file.path);
       if (!editor.base && !editor.rules)
         throw Error('File does not match specifications'); // has to have these attributes
-      defaultTheme.editor = editor as Partial<
-        MonacoType.editor.IStandaloneThemeData
-      >;
+      defaultTheme.editor = editor as Partial<MonacoType.editor.IStandaloneThemeData>;
       const newTheme = defaultTheme;
       const name = editor.name ? editor.name : file.name;
       await this.createNewThemeFromMonaco(name, newTheme);
     } catch (error) {
-      this.props.appState.setGenericDialogOptions({
-        type: GenericDialogType.warning,
-        label: `Error: ${error}, please pick a different file.`,
-      });
-      this.props.appState.isGenericDialogShowing = true;
+      appState.showErrorDialog(`${error}, please pick a different file.`);
       return;
     }
 
@@ -92,11 +88,14 @@ export class AddThemeDialog extends React.Component<
   public async createNewThemeFromMonaco(
     name: string,
     newTheme: LoadedFiddleTheme,
-  ): Promise<boolean> {
-    if (!name) return false;
+  ): Promise<void> {
+    if (!name) {
+      throw new Error(`Filename ${name} not found`);
+    }
+
     const themePath = path.join(THEMES_PATH, `${name}`);
 
-    await fsType.outputJSON(
+    await fs.outputJSON(
       themePath,
       {
         ...newTheme,
@@ -107,7 +106,6 @@ export class AddThemeDialog extends React.Component<
 
     this.props.appState.setTheme(themePath);
     shell.showItemInFolder(themePath);
-    return true;
   }
 
   get buttons() {
