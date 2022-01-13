@@ -1,8 +1,6 @@
-import * as fsType from 'fs-extra';
-import * as MonacoType from 'monaco-editor';
+import * as fs from 'fs-extra';
 import * as path from 'path';
 
-import { fancyImport } from '../utils/import';
 import { CONFIG_PATH } from './constants';
 import {
   defaultDark,
@@ -20,18 +18,10 @@ export const THEMES_PATH = path.join(CONFIG_PATH, 'themes');
  * @param {typeof MonacoType} [monaco]
  * @param {LoadedFiddleTheme} [theme]
  */
-export async function activateTheme(
-  monaco?: typeof MonacoType,
-  theme?: LoadedFiddleTheme,
-  name?: string | null,
-) {
-  const _monaco = monaco || window.ElectronFiddle.app.monaco;
-  const _theme = theme || (await getTheme(name));
-
-  if (!_monaco || !_monaco.editor) return;
-
-  _monaco.editor.defineTheme('main', _theme.editor as any);
-  _monaco.editor.setTheme('main');
+export function activateTheme(theme: LoadedFiddleTheme) {
+  const { monaco } = window.ElectronFiddle;
+  monaco.editor.defineTheme('main', theme.editor as any);
+  monaco.editor.setTheme('main');
 }
 
 /**
@@ -47,7 +37,6 @@ export async function readThemeFile(
   if (!name || name === DefaultThemes.DARK) return defaultDark as any;
   if (name === DefaultThemes.LIGHT) return defaultLight as any;
 
-  const fs = await fancyImport<typeof fsType>('fs-extra');
   const file = name.endsWith('.json') ? name : `${name}.json`;
   const themePath = path.join(THEMES_PATH, file);
 
@@ -70,7 +59,6 @@ export async function readThemeFile(
  * @returns {Promise<Array<FiddleTheme>>}
  */
 export async function getAvailableThemes(): Promise<Array<LoadedFiddleTheme>> {
-  const fs = await fancyImport<typeof fsType>('fs-extra');
   const themes: Array<LoadedFiddleTheme> = [
     defaultDark as any,
     defaultLight as any,
@@ -120,9 +108,7 @@ export async function getTheme(
  * @param {FiddleTheme} theme
  * @returns {string}
  */
-export async function getCssStringForTheme(
-  theme: FiddleTheme,
-): Promise<string> {
+async function getCssStringForTheme(theme: FiddleTheme): Promise<string> {
   let cssContent = '';
 
   Object.keys(theme.common).forEach((key) => {

@@ -1,7 +1,7 @@
 jest.mock('child_process');
 
-const mockFixPath = jest.fn();
-jest.mock('fix-path', () => mockFixPath);
+const mockShellPath = jest.fn();
+jest.mock('shell-path', () => mockShellPath);
 
 describe('exec', () => {
   const oldPlatform = process.platform;
@@ -46,10 +46,8 @@ describe('exec', () => {
     it('handles errors', async () => {
       let errored = false;
       const cpExec = require('child_process').exec;
-      (cpExec as jest.Mock<
-        any
-      >).mockImplementation((_a: any, _b: any, c: any) =>
-        c(new Error('Poop!')),
+      (cpExec as jest.Mock<any>).mockImplementation(
+        (_a: any, _b: any, c: any) => c(new Error('Poop!')),
       );
 
       try {
@@ -70,17 +68,27 @@ describe('exec', () => {
 
       await execModule.maybeFixPath();
 
-      expect(mockFixPath).toHaveBeenCalledTimes(0);
+      expect(mockShellPath).toHaveBeenCalledTimes(0);
     });
 
-    it('does call fix-path on macOS', async () => {
+    it('calls shell-path on macOS', async () => {
       Object.defineProperty(process, 'platform', {
         value: 'darwin',
       });
 
       await execModule.maybeFixPath();
 
-      expect(mockFixPath).toHaveBeenCalledTimes(1);
+      expect(mockShellPath).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls shell-path on Linux', async () => {
+      Object.defineProperty(process, 'platform', {
+        value: 'linux',
+      });
+
+      await execModule.maybeFixPath();
+
+      expect(mockShellPath).toHaveBeenCalledTimes(1);
     });
   });
 });

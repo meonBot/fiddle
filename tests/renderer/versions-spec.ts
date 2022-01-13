@@ -1,34 +1,36 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import semver from 'semver';
-import { RunnableVersion, VersionSource } from '../../src/interfaces';
+import * as semver from 'semver';
 import {
-  addLocalVersion,
   ElectronReleaseChannel,
+  RunnableVersion,
+  VersionSource,
+} from '../../src/interfaces';
+import {
+  VersionKeys,
+  addLocalVersion,
   fetchVersions,
   getDefaultVersion,
-  getKnownVersions,
+  getElectronVersions,
   getLocalVersions,
+  getOldestSupportedMajor,
   getReleaseChannel,
-  getUpdatedElectronVersions,
+  isReleasedMajor,
   saveLocalVersions,
-  VersionKeys,
 } from '../../src/renderer/versions';
-import { mockFetchOnce } from '../utils';
+import { FetchMock } from '../utils';
 
-const { expectedVersionCount } = require('../fixtures/releases-metadata.json');
+jest.mock('../../src/renderer/binary', () => ({
+  getVersionState: jest
+    .fn()
+    .mockImplementation((v: RunnableVersion) => v.state),
+}));
 
 const mockVersions: Array<Partial<RunnableVersion>> = [
   { version: 'test-0', localPath: '/test/path/0' },
   { version: 'test-1', localPath: '/test/path/1' },
   { version: 'test-2', localPath: '/test/path/2' },
 ];
-
-jest.mock('semver', () => ({
-  default: {
-    gte: jest.fn(),
-  },
-}));
 
 describe('versions', () => {
   describe('getDefaultVersion()', () => {
@@ -38,30 +40,21 @@ describe('versions', () => {
       expect(output).toBe('2.0.2');
     });
 
-    it('handles a v-prefixed version', () => {
-      (localStorage.getItem as any).mockReturnValue('v2.0.2');
-      const output = getDefaultVersion([{ version: '2.0.2' }] as any);
-      expect(output).toBe('2.0.2');
-    });
-
-    it('handles garbage data', () => {
-      (localStorage.getItem as any).mockReturnValue('v3.0.0');
-      const output = getDefaultVersion([{ version: '2.0.2' }] as any);
-      expect(output).toBe('2.0.2');
-    });
-
-    it('handles if no version is set', () => {
+    it('uses the newest stable as a fallback', () => {
       (localStorage.getItem as any).mockReturnValue(null);
-      const output = getDefaultVersion([{ version: '2.0.2' }] as any);
-      expect(output).toBe('2.0.2');
+      const output = getDefaultVersion([
+        { version: '11.0.0' },
+        { version: '15.0.0-nightly.20210715' },
+        { version: '13.0.0' },
+        { version: '15.0.0-alpha.1' },
+        { version: '12.0.0' },
+        { version: '14.0.0-beta.1' },
+      ] as any);
+      expect(output).toBe('13.0.0');
     });
 
     it('throws if everything goes wrong', () => {
-      const testFn = () => {
-        return getDefaultVersion(null as any);
-      };
-
-      expect(testFn).toThrow();
+      expect(() => getDefaultVersion([])).toThrow();
     });
   });
 
@@ -80,14 +73,6 @@ describe('versions', () => {
           version: 'v3.0.0-beta.4',
         } as any),
       ).toBe(ElectronReleaseChannel.beta);
-    });
-
-    it('identifies an unsupported release', () => {
-      expect(
-        getReleaseChannel({
-          version: 'v2.1.0-unsupported.20180809',
-        } as any),
-      ).toBe(ElectronReleaseChannel.unsupported);
     });
 
     it('identifies a stable release', () => {
@@ -176,16 +161,11 @@ describe('versions', () => {
 
   describe('fetchVersions()', () => {
     it('fetches versions >= 0.24.0', async () => {
-      const mockUnpkgResponse = fs.readFileSync(
-        path.join(__dirname, '../mocks/unpkg-mock.json'),
-      );
-      mockFetchOnce(mockUnpkgResponse.toString());
-
-      // return whether or not version in JSON is >=0.24.0
-      (semver.gte as jest.Mock).mockReturnValueOnce(true);
-      (semver.gte as jest.Mock).mockReturnValueOnce(true);
-      (semver.gte as jest.Mock).mockReturnValueOnce(true);
-      (semver.gte as jest.Mock).mockReturnValueOnce(false);
+      const fetchMock = new FetchMock();
+      const url = 'https://releases.electronjs.org/releases.json';
+      const filename = path.join(__dirname, '../mocks/versions-mock.json');
+      const contents = fs.readFileSync(filename).toString();
+      fetchMock.add(url, contents);
 
       const result = await fetchVersions();
       const expected = [
@@ -199,19 +179,33 @@ describe('versions', () => {
     });
   });
 
-  describe('getKnownVersions()', () => {
-    it('tries to get versions from localStorage', () => {
+  describe('getOldestSupportedMajor()', () => {
+    it('uses localStorage versions if available', () => {
+      // inject versions into localstorage
       (window as any).localStorage.getItem.mockReturnValueOnce(
-        `[{ "version": "3.0.5" }]`,
+        `[
+          { "version": "10.0.0" },
+          { "version": "9.0.0" },
+          { "version": "8.0.0" },
+          { "version": "7.0.0" },
+          { "version": "6.0.0" }
+        ]`,
       );
-
-      expect(getKnownVersions()).toEqual([{ version: '3.0.5' }]);
+      expect(getOldestSupportedMajor()).toEqual(7);
     });
 
-    it('falls back to a local require', () => {
-      (window as any).localStorage.getItem.mockReturnValueOnce(`garbage`);
+    function getExpectedOldestSupportedVersion() {
+      const versions = getElectronVersions();
+      const major = semver.parse(getDefaultVersion(versions))!.major;
+      const NUM_BRANCHES = parseInt(process.env.NUM_STABLE_BRANCHES || '') || 4;
+      return major + 1 - NUM_BRANCHES;
+    }
 
-      expect(getKnownVersions().length).toBe(expectedVersionCount);
+    it('falls back to a local require', () => {
+      (window as any).localStorage.getItem.mockReturnValueOnce('garbage');
+
+      const expected = getExpectedOldestSupportedVersion();
+      expect(getOldestSupportedMajor()).toBe(expected);
     });
 
     it('falls back to a local require', () => {
@@ -219,27 +213,32 @@ describe('versions', () => {
         `[{ "garbage": "true" }]`,
       );
 
-      expect(getKnownVersions().length).toBe(expectedVersionCount);
+      const expected = getExpectedOldestSupportedVersion();
+      expect(getOldestSupportedMajor()).toBe(expected);
+    });
+
+    it('honors process.env.NUM_STABLE_BRANCHES', () => {
+      (window as any).localStorage.getItem.mockReturnValueOnce('garbage');
+
+      process.env.NUM_STABLE_BRANCHES = '2';
+      const expected = getExpectedOldestSupportedVersion();
+      expect(getOldestSupportedMajor()).toBe(expected);
     });
   });
 
-  describe('getUpdatedElectronVersions()', () => {
-    it('gets known versions', async () => {
+  describe('isReleasedMajor()', () => {
+    it('returns true for recognized releases', () => {
       (window as any).localStorage.getItem.mockReturnValueOnce(
         `[{ "version": "3.0.5" }]`,
       );
+      expect(isReleasedMajor(3)).toBe(true);
+    });
+
+    it('returns false for unrecognized releases', () => {
       (window as any).localStorage.getItem.mockReturnValueOnce(
         `[{ "version": "3.0.5" }]`,
       );
-      mockFetchOnce('');
-
-      const result = await getUpdatedElectronVersions();
-      const expectedVersion = { version: '3.0.5', state: 'unknown' };
-
-      expect(result).toEqual([
-        { ...expectedVersion, source: 'remote' },
-        { ...expectedVersion, source: 'local', state: 'ready' },
-      ]);
+      expect(isReleasedMajor(1000)).toBe(false);
     });
   });
 });

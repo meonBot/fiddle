@@ -38,7 +38,7 @@ describe('IpcMainManager', () => {
 
       ipcMainManager.send(IpcEvents.FIDDLE_RUN);
 
-      expect(mockTarget.webContents.send).toHaveBeenCalledWith(
+      expect(mockTarget.webContents.send).toHaveBeenCalledWith<any>(
         IpcEvents.FIDDLE_RUN,
       );
     });
@@ -53,7 +53,7 @@ describe('IpcMainManager', () => {
 
       ipcMainManager.send(IpcEvents.FIDDLE_RUN, undefined, mockTarget as any);
 
-      expect(mockTarget.send).toHaveBeenCalledWith(IpcEvents.FIDDLE_RUN);
+      expect(mockTarget.send).toHaveBeenCalledWith<any>(IpcEvents.FIDDLE_RUN);
     });
 
     it('does not send an event to a target window if it is not ready', () => {
@@ -66,6 +66,28 @@ describe('IpcMainManager', () => {
       ipcMainManager.send(IpcEvents.FIDDLE_RUN, undefined, mockTarget as any);
 
       expect(mockTarget.send).toHaveBeenCalledTimes(0);
+    });
+  });
+
+  describe('handle()', () => {
+    it('calls ipcMain.handle', () => {
+      const noop = () => ({});
+      ipcMainManager.handle(IpcEvents.FIDDLE_RUN, noop);
+      expect(electron.ipcMain.handle).toHaveBeenCalledWith(
+        IpcEvents.FIDDLE_RUN,
+        noop,
+      );
+    });
+  });
+
+  describe('handleOnce()', () => {
+    it('calls ipcMain.handleOnce', () => {
+      const noop = () => ({});
+      ipcMainManager.handleOnce(IpcEvents.FIDDLE_RUN, noop);
+      expect(electron.ipcMain.handleOnce).toHaveBeenCalledWith(
+        IpcEvents.FIDDLE_RUN,
+        noop,
+      );
     });
   });
 });

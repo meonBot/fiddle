@@ -1,7 +1,4 @@
-import { EditorValues } from '../interfaces';
 import { exec } from '../utils/exec';
-
-import { builtinModules } from 'module';
 
 export type IPackageManager = 'npm' | 'yarn';
 
@@ -10,28 +7,8 @@ export interface PMOperationOptions {
   packageManager: IPackageManager;
 }
 
-export let isNpmInstalled: boolean | null = null;
-export let isYarnInstalled: boolean | null = null;
-
-/* add other modules to automatically ignore here */
-/* perhaps we can expose this to the settings module?*/
-const ignoredModules: Array<string> = [
-  'electron',
-  'original-fs',
-  ...builtinModules,
-];
-
-/* regular expression to both match and extract module names */
-const requiregx = /require\(['"](.*?)['"]\)/gm;
-
-/*
- Quick and dirty filter functions for filtering module names
-*/
-const isIgnored = (str: string): boolean => ignoredModules.includes(str);
-const isLocalModule = (str: string): boolean => /^[,/~\.]/.test(str);
-const isUnique = (item: any, idx: number, arr: Array<any>): boolean => {
-  return arr.lastIndexOf(item) === idx;
-};
+let isNpmInstalled: boolean | null = null;
+let isYarnInstalled: boolean | null = null;
 
 /**
  * Checks if package manager is installed by checking if a binary
@@ -71,73 +48,20 @@ export async function getIsPackageManagerInstalled(
 }
 
 /**
- * Finds npm modules in editor values, returning an array of modules.
- */
-export async function findModulesInEditors(values: EditorValues) {
-  const files = [values.main, values.renderer, values.preload];
-  const modules: Array<string> = [];
-
-  for (const file of files) {
-    modules.push(...(await findModules(file)));
-  }
-
-  console.log('Modules Found:', modules);
-
-  return Array.from(new Set(modules));
-}
-
-/**
- * Finds `require()` statements in a string.
- * Tries to exclude electron and Node built-ins as well as file-path
- * references. Also will try to install base packages of modules
- * that have a slash in them, for example: `lodash/fp` as the actual package
- * is just `lodash`.
- *
- * However, it WILL try to add packages that are part of a huge
- * monorepo that are named `@<group>/<package>`
- *
- * @param {string} input
- * @returns {Array<string>}
- */
-export async function findModules(input: string) {
-  /* container definitions */
-  const modules: Array<string> = [];
-  let match: RegExpMatchArray | null;
-
-  /* decomment code with the esprima parser */
-  const code = await decommentWithWorker(input);
-
-  /* grab all global require matches in the text */
-  while ((match = requiregx.exec(code) || null)) {
-    const mod = match[1];
-    modules.push(mod);
-  }
-
-  /* map and reduce */
-  return modules
-    .map((mod) =>
-      mod.includes('/') && !mod.startsWith('@') ? mod.split('/')[0] : mod,
-    )
-    .filter((m) => !isIgnored(m))
-    .filter((m) => !isLocalModule(m))
-    .filter(isUnique);
-}
-
-/**
  * Installs given modules to a given folder.
  *
  * @param {PMOperationOptions} { dir, packageManager }
  * @param {...Array<string>} names
  * @returns {Promise<string>}
  */
-export async function installModules(
+export async function addModules(
   { dir, packageManager }: PMOperationOptions,
   ...names: Array<string>
 ): Promise<string> {
   let nameArgs: Array<string> = [];
 
   if (packageManager === 'npm') {
-    nameArgs = names.length > 0 ? ['-S', ...names] : ['--dev --prod'];
+    nameArgs = names.length > 0 ? ['-S', ...names] : ['--also=dev --prod'];
   } else {
     nameArgs = [...names];
   }
@@ -159,17 +83,4 @@ export function packageRun(
   command: string,
 ): Promise<string> {
   return exec(dir, `${packageManager} run ${command}`);
-}
-
-export function decommentWithWorker(input: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const worker = new Worker('../utils/decomment.ts');
-    worker.onmessage = function (event: MessageEvent<string>) {
-      resolve(event.data);
-    };
-    worker.postMessage(input);
-    worker.onerror = function (e) {
-      reject(e);
-    };
-  });
 }
